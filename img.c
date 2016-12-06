@@ -1,23 +1,58 @@
 #include "img.h"
 
-static void cat(FILE *fp)
+static
+RGBpix** RGBpix_new(int width, int height)
 {
-    char buffer[4096];
-    while (fgets(buffer, sizeof(buffer), fp) != 0)
-         fputs(buffer, stdout);
+    int h;
+
+    RGBpix **pix = (RGBpix**) calloc(height, sizeof(RGBpix*));
+    for (h = 0; h < height; h++)
+    {
+        pix[h] = (RGBpix*) calloc(width, sizeof(RGBpix));
+    }
+
+    return pix;
 }
 
-void readPixels(const char *filename, image *img)
+static
+void RGBpix_free(RGBpix** pix, int height)
 {
-    int h, w;
+    int h;
 
-    /* open file named fileName in read mode */
+    for (h = 0; h < height; h++)
+    {
+        free(pix[h]);
+    }
+    free(pix);
+
+}
+
+static image * 
+image_new(int width, int height)
+{
+    image *img = (image*) calloc(1, sizeof(image));
+    img->pix = RGBpix_new(width, height);
+}
+
+static
+void image_free(image* img, int height)
+{
+    RGBpix_free(img->pix, height);
+    free(img);
+}
+
+static
+void image_read(const char *filename, image *img)
+{
+    int h, w, height, width, maxval;
+    char type[] = "P6";
     FILE *file;
+    /* open file named fileName in read mode */
     file = fopen(filename, "rb");
 
     /* read file header and check for error */
     fscanf(file, "%s\n%d %d\n%d\n",
-            img->type, &img->width, &img->height, &img->maxval);
+           type, width, height, maxval);
 
     img->pix = (struct RGBpix**) calloc(img->height, sizeof(struct RGBpix*));
     for (h = 0; h < img->height; h++)
@@ -33,12 +68,13 @@ void readPixels(const char *filename, image *img)
             fread((void *) &(img->pix[h][w].blue), sizeof(unsigned char), 1, file);
         }
     }
-printf("%s\n", img->pix[0][0].red);
+
     /* clean up */
     fclose(file);
 }
 
-void writePixels(const char *filename, image *img)
+static
+void image_write(const char *filename, image *img)
 {
     int h, w;
 
@@ -60,36 +96,35 @@ void writePixels(const char *filename, image *img)
         }
     }
 
-    cat(file);
-
     /* clean up */
     fclose(file);
 }
 
-unsigned char reduce(unsigned char pixel)
+static
+unsigned char pixel_reduce(unsigned char pixel)
 {
-    if (0 <= (int)pixel && (int)pixel < 64)
+    if ((int)pixel < 64)
         return 0;
     else if (64 <= (int)pixel && (int)pixel < 128)
         return 64;
     else if (128 <= (int)pixel && (int)pixel < 192)
         return 128;
-    else if (192 <= (int)pixel && (int)pixel < 256)
+    else if (192 <= (int)pixel)
         return 192;
 
     return 0;
 }
 
-image* posterize(image *img)
+static
+void image_posterize(image *img, image *postimg)
 {
-    printf("%c\n", img->pix[120][100].red);
+    //printf("%c\n", img->pix[120][100].red);
     int w, h;
 
-    image *postimg = malloc (sizeof (struct image));
     postimg->pix = (struct RGBpix**) calloc(img->height, sizeof(struct RGBpix*));
     for (h = 0; h < img->height; h++)
     {
-        img->pix[h] = (struct RGBpix*) calloc(img->width, sizeof(struct RGBpix));
+        postimg->pix[h] = (struct RGBpix*) calloc(img->width, sizeof(struct RGBpix));
     }
 
     /* complete image header */
@@ -103,13 +138,12 @@ image* posterize(image *img)
     {
         for (w = 0; w < postimg->width; w++)
         {
-            postimg->pix[w][h].red = reduce(img->pix[w][h].red);
-            postimg->pix[w][h].green = reduce(img->pix[w][h].green);
-            postimg->pix[w][h].blue = reduce(img->pix[w][h].blue);
+            postimg->pix[h][w].red = pixel_reduce(img->pix[h][w].red);
+            postimg->pix[h][w].green = pixel_reduce(img->pix[h][w].green);
+            postimg->pix[h][w].blue = pixel_reduce(img->pix[h][w].blue);
 
         }
     }
-    return postimg;
 }
 
 int main(int argc, char const *argv[])
@@ -120,10 +154,10 @@ int main(int argc, char const *argv[])
 
     const char *filein = argv[1];
     const char *fileout = argv[2];
-    image *img = malloc (sizeof (struct image));
+    image *img, *posterized;
 
-    readPixels (filein, img);
-    image *postimg = posterize(img);
-    writePixels(fileout, img);
+    image_read(filein, img);
+    image_posterize(img, posterized);
+    image_write(fileout, img);
     return 0;
 }
