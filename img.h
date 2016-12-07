@@ -1,11 +1,16 @@
-//#include "omp.h"
+#include "omp.h"
+#include "time.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#define PIXELATE_RATIO 25
+
+typedef unsigned char pixel;
+
 typedef struct RGBpix
 {
-    unsigned char red, blue, green;
+    pixel red, blue, green;
 } RGBpix;
 
 typedef struct image

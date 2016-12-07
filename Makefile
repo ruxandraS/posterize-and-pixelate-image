@@ -1,7 +1,9 @@
 CC=gcc
 CFLAGS = -Wall -Wextra -g
-build: img.h img.c
+serial: img.h img.c
 	$(CC) img.c -o imgserial $(CFLAGS)
+omp: img.h imgomp.c
+	$(CC) -fopenmp imgomp.c -o imgomp $(CFLAGS)
 clean:
-	rm imgserial
-	rm fout.ppm
+	rm -f imgserial imgomp imgmpi
+	rm -f *.ppm

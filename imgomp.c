@@ -1,5 +1,7 @@
 #include "img.h"
 
+extern int num_threads;
+
 static RGBpix **
 rgbpix_new(int width, int height)
 {
@@ -136,6 +138,9 @@ image_posterize(image *img)
     posterized->height = img->height;
     posterized->maxval = img->maxval;
 
+    #pragma omp set_num_of_threads(num_threads)
+    #pragma omp parallel
+    #pragma omp for private(h, w)
     for (h = 0; h < posterized->height; h++)
     {
         for (w = 0; w < posterized->width; w++)
@@ -153,23 +158,6 @@ image_posterize(image *img)
 static pixel
 pixel_pixelate(image *img, char channel, int width, int height)
 {
-    // int h, w, avg_red, avg_green, avg_blue, count;
-    // avg_red = 0;
-    // avg_green = 0;
-    // avg_blue = 0;
-    // pixel_count = 0;
-
-    // for(h = height; h < height + PIXELATE_RATIO && 
-    //     height + PIXELATE_RATIO < img->height; h++) {
-    //     for(w = width; w < width + PIXELATE_RATIO && 
-    //         width + PIXELATE_RATIO < img->width; w++) {
-    //         avg_red += img->pix[h][w].red;
-    //         avg_green += img->pix[h][w].green;
-    //         avg_blue += img->pix[h][w].blue;
-    //         pixel_count++;
-    //     }
-    // }
-
     int h, w, pixel_avg, pixel_count;
     pixel_avg = 0;
     pixel_count = 0;
@@ -222,10 +210,7 @@ image_pixelate(image *img)
             pixelated->pix[h][w].red = pixel_pixelate(img, 'r', w, h);
             pixelated->pix[h][w].green = pixel_pixelate(img, 'g', w, h);
             pixelated->pix[h][w].blue = pixel_pixelate(img, 'b', w, h);
-            // for(ph = h; ph < h + PIXEL_RATIO && h + PIXEL_RATIO < img->height; ph++)
-            //     for(pw = w; pw < w PIXEL_RATIO && h + PIXEL_RATIO < img->height; pw++)
 
-                    
         }
     }
 
@@ -237,23 +222,25 @@ int main(int argc, char const *argv[])
     image *img, *posterized, *pixelated;
     const char *filter, *filein, *fileout;
     double start, end;
+    int num_threads;
 
-    if (argc < 4) {
-        printf("Usage: <executable> <filter_name> <input_file> <output_file>\n");
+    if (argc < 5) {
+        printf("Usage: <executable> <filter_name> <input_file> <output_file> <num_threads>\n");
         return 0;
     }
 
     filter = argv[1];
     filein = argv[2];
     fileout = argv[3];
+    num_threads = atoi(argv[4]);
 
     img = image_read(filein);
 
     if (strcmp("pixelate", filter) == 0)
     {
-        start = clock();
+        start = omp_get_wtime();
         pixelated = image_pixelate(img);
-        end = clock();
+        end = omp_get_wtime();
 
         image_write(pixelated, fileout);
         image_free(pixelated, pixelated->height);
@@ -261,9 +248,9 @@ int main(int argc, char const *argv[])
 
     else if (strcmp("posterize", filter) == 0)
     {
-        start = clock();
+        start = omp_get_wtime();
         posterized = image_posterize(img);
-        end = clock();
+        end = omp_get_wtime();
 
         image_write(posterized, fileout);
         image_free(posterized, posterized->height);
@@ -276,7 +263,7 @@ int main(int argc, char const *argv[])
 
     image_free(img, img->height);
 
-    printf("Serial running time is: %f\n", (end-start)/CLOCKS_PER_SEC);
+    printf("OMP running time is: %f\n", end-start);
 
     return 0;
 }
