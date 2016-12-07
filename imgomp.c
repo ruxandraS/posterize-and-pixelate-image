@@ -1,5 +1,7 @@
 #include "img.h"
 
+#include "omp.h"
+
 extern int num_threads;
 
 static RGBpix **
@@ -138,9 +140,7 @@ image_posterize(image *img)
     posterized->height = img->height;
     posterized->maxval = img->maxval;
 
-    #pragma omp set_num_of_threads(num_threads)
-    #pragma omp parallel
-    #pragma omp for private(h, w)
+    #pragma omp parallel for collapse(2) private(h, w)
     for (h = 0; h < posterized->height; h++)
     {
         for (w = 0; w < posterized->width; w++)
@@ -155,44 +155,10 @@ image_posterize(image *img)
     return posterized;
 }
 
-static pixel
-pixel_pixelate(image *img, char channel, int width, int height)
-{
-    int h, w, pixel_avg, pixel_count;
-    pixel_avg = 0;
-    pixel_count = 0;
-
-    for(h = height; h < height + PIXELATE_RATIO && 
-        height + PIXELATE_RATIO < img->height; h++) {
-        for(w = width; w < width + PIXELATE_RATIO && 
-            width + PIXELATE_RATIO < img->width; w++) {
-            switch(channel) {
-                case 'r':
-                    pixel_avg += img->pix[h][w].red;
-                    break;
-                case 'g':
-                    pixel_avg += img->pix[h][w].green;
-                    break;
-                case 'b':
-                    pixel_avg += img->pix[h][w].blue;
-                    break;
-
-            }
-            
-            pixel_count++;
-        }
-    }
-
-    if (pixel_count)
-        return pixel_avg/pixel_count;
-    return 0;
-
-}
-
 static image *
 image_pixelate(image *img)
 {
-    int w, h;// pw, ph;
+    int w, h, pw, ph, avg_red, avg_green, avg_blue, pixel_count, hmax, wmax;
     image *pixelated;
 
     pixelated = image_new(img->width, img->height);
@@ -203,14 +169,44 @@ image_pixelate(image *img)
     pixelated->height = img->height;
     pixelated->maxval = img->maxval;
 
-    for (h = 0; h < pixelated->height; h++)
+    #pragma omp parallel for collapse(2) private(h, w, ph, pw)
+    for (h = 0; h < pixelated->height; h += PIXELATE_RATIO)
     {
-        for (w = 0; w < pixelated->width; w++)
+        for (w = 0; w < pixelated->width; w+= PIXELATE_RATIO)
         {
-            pixelated->pix[h][w].red = pixel_pixelate(img, 'r', w, h);
-            pixelated->pix[h][w].green = pixel_pixelate(img, 'g', w, h);
-            pixelated->pix[h][w].blue = pixel_pixelate(img, 'b', w, h);
+            if (h % PIXELATE_RATIO == 0 && w % PIXELATE_RATIO == 0) {
+                avg_red = 0;
+                avg_green = 0;
+                avg_blue = 0;
+                pixel_count = 0;
 
+                hmax = min(pixelated->height, h + PIXELATE_RATIO);
+                wmax = min(pixelated->width, w + PIXELATE_RATIO);
+                
+                // #pragma omp parallel for private (ph, pw) reduction(+: avg_red, avg_green, avg_blue, pixel_count)
+                for (ph = h; ph < hmax; ph++) {
+                    for (pw = w; pw < wmax; pw++) {
+                        avg_red += img->pix[ph][pw].red;
+                        avg_green += img->pix[ph][pw].green;
+                        avg_blue += img->pix[ph][pw].blue;
+                        pixel_count++;
+                    }
+                }
+
+                avg_red /= pixel_count;
+                avg_green /= pixel_count;
+                avg_blue /= pixel_count;
+            }
+
+            for (ph = h; ph < h + PIXELATE_RATIO 
+                && ph < pixelated->height; ph++) {
+                for (pw = w; pw < w + PIXELATE_RATIO 
+                    && pw < pixelated->width; pw++) {
+                    pixelated->pix[ph][pw].red = avg_red;
+                    pixelated->pix[ph][pw].green = avg_green;
+                    pixelated->pix[ph][pw].blue = avg_blue;
+                }
+            }                    
         }
     }
 
@@ -233,6 +229,8 @@ int main(int argc, char const *argv[])
     filein = argv[2];
     fileout = argv[3];
     num_threads = atoi(argv[4]);
+
+    omp_set_num_threads(num_threads);
 
     img = image_read(filein);
 

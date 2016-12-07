@@ -150,61 +150,10 @@ image_posterize(image *img)
     return posterized;
 }
 
-static pixel
-pixel_pixelate(image *img, char channel, int width, int height)
-{
-    // int h, w, avg_red, avg_green, avg_blue, count;
-    // avg_red = 0;
-    // avg_green = 0;
-    // avg_blue = 0;
-    // pixel_count = 0;
-
-    // for(h = height; h < height + PIXELATE_RATIO && 
-    //     height + PIXELATE_RATIO < img->height; h++) {
-    //     for(w = width; w < width + PIXELATE_RATIO && 
-    //         width + PIXELATE_RATIO < img->width; w++) {
-    //         avg_red += img->pix[h][w].red;
-    //         avg_green += img->pix[h][w].green;
-    //         avg_blue += img->pix[h][w].blue;
-    //         pixel_count++;
-    //     }
-    // }
-
-    int h, w, pixel_avg, pixel_count;
-    pixel_avg = 0;
-    pixel_count = 0;
-
-    for(h = height; h < height + PIXELATE_RATIO && 
-        height + PIXELATE_RATIO < img->height; h++) {
-        for(w = width; w < width + PIXELATE_RATIO && 
-            width + PIXELATE_RATIO < img->width; w++) {
-            switch(channel) {
-                case 'r':
-                    pixel_avg += img->pix[h][w].red;
-                    break;
-                case 'g':
-                    pixel_avg += img->pix[h][w].green;
-                    break;
-                case 'b':
-                    pixel_avg += img->pix[h][w].blue;
-                    break;
-
-            }
-            
-            pixel_count++;
-        }
-    }
-
-    if (pixel_count)
-        return pixel_avg/pixel_count;
-    return 0;
-
-}
-
 static image *
 image_pixelate(image *img)
 {
-    int w, h;// pw, ph;
+    int w, h, pw, ph, avg_red, avg_green, avg_blue, pixel_count;
     image *pixelated;
 
     pixelated = image_new(img->width, img->height);
@@ -215,17 +164,40 @@ image_pixelate(image *img)
     pixelated->height = img->height;
     pixelated->maxval = img->maxval;
 
-    for (h = 0; h < pixelated->height; h++)
+    for (h = 0; h < pixelated->height; h += PIXELATE_RATIO)
     {
-        for (w = 0; w < pixelated->width; w++)
+        for (w = 0; w < pixelated->width; w+= PIXELATE_RATIO)
         {
-            pixelated->pix[h][w].red = pixel_pixelate(img, 'r', w, h);
-            pixelated->pix[h][w].green = pixel_pixelate(img, 'g', w, h);
-            pixelated->pix[h][w].blue = pixel_pixelate(img, 'b', w, h);
-            // for(ph = h; ph < h + PIXEL_RATIO && h + PIXEL_RATIO < img->height; ph++)
-            //     for(pw = w; pw < w PIXEL_RATIO && h + PIXEL_RATIO < img->height; pw++)
+            if (h % PIXELATE_RATIO == 0 && w % PIXELATE_RATIO == 0) {
+                avg_red = 0;
+                avg_green = 0;
+                avg_blue = 0;
+                pixel_count = 0;
+                for (ph = h; ph < h + PIXELATE_RATIO 
+                    && ph < pixelated->height; ph++) {
+                    for (pw = w; pw < w + PIXELATE_RATIO 
+                        && pw < pixelated->width; pw++) {
+                        avg_red += img->pix[ph][pw].red;
+                        avg_green += img->pix[ph][pw].green;
+                        avg_blue += img->pix[ph][pw].blue;
+                        pixel_count++;
+                    }
+                }
 
-                    
+                avg_red /= pixel_count;
+                avg_green /= pixel_count;
+                avg_blue /= pixel_count;
+            }
+
+            for (ph = h; ph < h + PIXELATE_RATIO 
+                && ph < pixelated->height; ph++) {
+                for (pw = w; pw < w + PIXELATE_RATIO 
+                    && pw < pixelated->width; pw++) {
+                    pixelated->pix[ph][pw].red = avg_red;
+                    pixelated->pix[ph][pw].green = avg_green;
+                    pixelated->pix[ph][pw].blue = avg_blue;
+                }
+            }                    
         }
     }
 
