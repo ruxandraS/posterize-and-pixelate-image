@@ -151,31 +151,20 @@ image_posterize(image *img)
 }
 
 static image *
-image_rotate(image *img, char direction)
+image_pixelate(image *img)
 {
     int w, h;
-    image *posterized;
+    image *pixelated;
 
-    posterized = image_new(img->width, img->height);
+    pixelated = image_new(img->width, img->height);
 
     /* complete image header */
-    strcpy(posterized->type, img->type);
-    posterized->width = img->width;
-    posterized->height = img->height;
-    posterized->maxval = img->maxval;
+    strcpy(pixelated->type, img->type);
+    pixelated->width = img->width;
+    pixelated->height = img->height;
+    pixelated->maxval = img->maxval;
 
-    for (h = 0; h < posterized->height; h++)
-    {
-        for (w = 0; w < posterized->width; w++)
-        {
-            posterized->pix[h][w].red = pixel_reduce(img->pix[h][w].red);
-            posterized->pix[h][w].green = pixel_reduce(img->pix[h][w].green);
-            posterized->pix[h][w].blue = pixel_reduce(img->pix[h][w].blue);
-
-        }
-    }
-
-    return posterized;
+    return pixelated;
 }
 
 int main(int argc, char const *argv[])
