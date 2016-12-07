@@ -1,7 +1,7 @@
 #include "img.h"
 
-static
-RGBpix** RGBpix_new(int width, int height)
+static RGBpix **
+rgbpix_new(int width, int height)
 {
     int h;
 
@@ -15,7 +15,7 @@ RGBpix** RGBpix_new(int width, int height)
 }
 
 static
-void RGBpix_free(RGBpix** pix, int height)
+void rgbpix_free(RGBpix **pix, int height)
 {
     int h;
 
@@ -31,34 +31,39 @@ static image *
 image_new(int width, int height)
 {
     image *img = (image*) calloc(1, sizeof(image));
-    img->pix = RGBpix_new(width, height);
+    img->pix = rgbpix_new(width, height);
+
+    return img;
 }
 
 static
-void image_free(image* img, int height)
+void image_free(image *img, int height)
 {
-    RGBpix_free(img->pix, height);
+    rgbpix_free(img->pix, height);
     free(img);
 }
 
-static
-void image_read(const char *filename, image *img)
+static image *
+image_read(const char *filename)
 {
     int h, w, height, width, maxval;
     char type[] = "P6";
     FILE *file;
+    image *img;
+
     /* open file named fileName in read mode */
     file = fopen(filename, "rb");
 
     /* read file header and check for error */
     fscanf(file, "%s\n%d %d\n%d\n",
-           type, width, height, maxval);
+           type, &width, &height, &maxval);
+    img = image_new(width, height);
 
-    img->pix = (struct RGBpix**) calloc(img->height, sizeof(struct RGBpix*));
-    for (h = 0; h < img->height; h++)
-    {
-        img->pix[h] = (struct RGBpix*) calloc(img->width, sizeof(struct RGBpix));
-    }
+    /* complete image header */
+    strcpy(img->type, type);
+    img->width = width;
+    img->height = height;
+    img->maxval = maxval;
 
     /* reading image pixels */
     for (h = 0; h < img->height; h++) {
@@ -71,15 +76,17 @@ void image_read(const char *filename, image *img)
 
     /* clean up */
     fclose(file);
+
+    return img;
 }
 
 static
-void image_write(const char *filename, image *img)
+void image_write(image *img, const char *filename)
 {
     int h, w;
-
-    /* open file named fileName in read mode & check for error */
     FILE *file;
+
+    /* open file named fileName in read mode */
     file = fopen(filename, "wb");
 
     /* write the header to the file */
@@ -115,35 +122,60 @@ unsigned char pixel_reduce(unsigned char pixel)
     return 0;
 }
 
-static
-void image_posterize(image *img, image *postimg)
+static image *
+image_posterize(image *img)
 {
-    //printf("%c\n", img->pix[120][100].red);
     int w, h;
+    image *posterized;
 
-    postimg->pix = (struct RGBpix**) calloc(img->height, sizeof(struct RGBpix*));
-    for (h = 0; h < img->height; h++)
-    {
-        postimg->pix[h] = (struct RGBpix*) calloc(img->width, sizeof(struct RGBpix));
-    }
+    posterized = image_new(img->width, img->height);
 
     /* complete image header */
-    strcpy(postimg->type, img->type);
-    postimg->width = img->width;
-    postimg->height = img->height;
-    postimg->maxval = img->maxval;
+    strcpy(posterized->type, img->type);
+    posterized->width = img->width;
+    posterized->height = img->height;
+    posterized->maxval = img->maxval;
 
-    //printf("%s\n%d% d\n%d\n", postimg->type, postimg->width, postimg->height, postimg->maxval);
-    for (h = 0; h < postimg->height; h++)
+    for (h = 0; h < posterized->height; h++)
     {
-        for (w = 0; w < postimg->width; w++)
+        for (w = 0; w < posterized->width; w++)
         {
-            postimg->pix[h][w].red = pixel_reduce(img->pix[h][w].red);
-            postimg->pix[h][w].green = pixel_reduce(img->pix[h][w].green);
-            postimg->pix[h][w].blue = pixel_reduce(img->pix[h][w].blue);
+            posterized->pix[h][w].red = pixel_reduce(img->pix[h][w].red);
+            posterized->pix[h][w].green = pixel_reduce(img->pix[h][w].green);
+            posterized->pix[h][w].blue = pixel_reduce(img->pix[h][w].blue);
 
         }
     }
+
+    return posterized;
+}
+
+static image *
+image_rotate(image *img, char direction)
+{
+    int w, h;
+    image *posterized;
+
+    posterized = image_new(img->width, img->height);
+
+    /* complete image header */
+    strcpy(posterized->type, img->type);
+    posterized->width = img->width;
+    posterized->height = img->height;
+    posterized->maxval = img->maxval;
+
+    for (h = 0; h < posterized->height; h++)
+    {
+        for (w = 0; w < posterized->width; w++)
+        {
+            posterized->pix[h][w].red = pixel_reduce(img->pix[h][w].red);
+            posterized->pix[h][w].green = pixel_reduce(img->pix[h][w].green);
+            posterized->pix[h][w].blue = pixel_reduce(img->pix[h][w].blue);
+
+        }
+    }
+
+    return posterized;
 }
 
 int main(int argc, char const *argv[])
@@ -154,10 +186,15 @@ int main(int argc, char const *argv[])
 
     const char *filein = argv[1];
     const char *fileout = argv[2];
-    image *img, *posterized;
+    image *img;
+    image *posterized;
 
-    image_read(filein, img);
-    image_posterize(img, posterized);
-    image_write(fileout, img);
+    img = image_read(filein);
+    posterized = image_posterize(img);
+    image_write(posterized, fileout);
+
+    image_free(img, img->height);
+    image_free(posterized, posterized->height);
+
     return 0;
 }
