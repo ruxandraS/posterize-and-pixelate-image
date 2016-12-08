@@ -140,7 +140,7 @@ image_posterize(image *img)
     posterized->height = img->height;
     posterized->maxval = img->maxval;
 
-    #pragma omp parallel for collapse(2) private(h, w)
+    #pragma omp parallel for collapse(2) private(w)
     for (h = 0; h < posterized->height; h++)
     {
         for (w = 0; w < posterized->width; w++)
@@ -148,7 +148,6 @@ image_posterize(image *img)
             posterized->pix[h][w].red = pixel_reduce(img->pix[h][w].red);
             posterized->pix[h][w].green = pixel_reduce(img->pix[h][w].green);
             posterized->pix[h][w].blue = pixel_reduce(img->pix[h][w].blue);
-
         }
     }
 
@@ -169,7 +168,14 @@ image_pixelate(image *img)
     pixelated->height = img->height;
     pixelated->maxval = img->maxval;
 
-    #pragma omp parallel for collapse(2) private(h, w, ph, pw)
+    avg_red = 0;
+    avg_green = 0;
+    avg_blue = 0;
+    pixel_count = 0;
+
+    #pragma omp parallel for collapse(2) \
+     shared(img) private(w, ph, pw, hmax, wmax) \
+     reduction(+: avg_red, avg_green, avg_blue, pixel_count)
     for (h = 0; h < pixelated->height; h += PIXELATE_RATIO)
     {
         for (w = 0; w < pixelated->width; w+= PIXELATE_RATIO)
@@ -182,8 +188,7 @@ image_pixelate(image *img)
 
                 hmax = min(pixelated->height, h + PIXELATE_RATIO);
                 wmax = min(pixelated->width, w + PIXELATE_RATIO);
-                
-                // #pragma omp parallel for private (ph, pw) reduction(+: avg_red, avg_green, avg_blue, pixel_count)
+
                 for (ph = h; ph < hmax; ph++) {
                     for (pw = w; pw < wmax; pw++) {
                         avg_red += img->pix[ph][pw].red;
@@ -193,20 +198,20 @@ image_pixelate(image *img)
                     }
                 }
 
+                #pragma omp flush
+
                 avg_red /= pixel_count;
                 avg_green /= pixel_count;
                 avg_blue /= pixel_count;
             }
 
-            for (ph = h; ph < h + PIXELATE_RATIO 
-                && ph < pixelated->height; ph++) {
-                for (pw = w; pw < w + PIXELATE_RATIO 
-                    && pw < pixelated->width; pw++) {
+            for (ph = h; ph < hmax; ph++) {
+                for (pw = w; pw < wmax; pw++) {
                     pixelated->pix[ph][pw].red = avg_red;
                     pixelated->pix[ph][pw].green = avg_green;
                     pixelated->pix[ph][pw].blue = avg_blue;
                 }
-            }                    
+            }                 
         }
     }
 
