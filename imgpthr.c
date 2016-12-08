@@ -1,4 +1,14 @@
 #include "img.h"
+#include <pthread.h>
+
+#define NUM_THREADS 4
+
+typedef struct thread_info {    /* Used as argument to thread_start() */
+    pthread_t   thread_id;        /* ID returned by pthread_create() */
+    int         thread_num;       /* Application-defined thread # */
+    int         fstw, fsth, lstw, lsth;
+    image       *img;      
+} thread_info;
 
 static
 pixel pixel_reduce(pixel pixel)
@@ -43,6 +53,13 @@ image_posterize(image *img)
     }
 
     return posterized;
+}
+
+static void *
+thread_posterize (void * arg)
+{
+    thread_info *tinfo = arg;
+    return image_posterize(tinfo->img);
 }
 
 static image *
@@ -108,7 +125,11 @@ int main(int argc, char const *argv[])
 {
     const char *filter, *filein, *fileout;
     double start, end;
+    int h, w, hmax, wmax, ph, pw;
     image *img, *posterized, *pixelated;
+    long t;
+    thread_info *tinfo;
+    void *res;
 
     if (argc < 4) {
         printf("Usage: <executable> <filter_name> <input_file> <output_file>\n");
@@ -120,6 +141,8 @@ int main(int argc, char const *argv[])
     fileout = argv[3];
 
     img = image_read(filein);
+
+    tinfo = calloc(NUM_THREADS, sizeof(thread_info));
 
     /* apply posterize or pixelate filter to image */
     if (strcmp("pixelate", filter) == 0)
@@ -134,8 +157,83 @@ int main(int argc, char const *argv[])
 
     else if (strcmp("posterize", filter) == 0)
     {
+        ph = img->height / NUM_THREADS;
+        pw = img->width / NUM_THREADS;
+
         start = clock();
-        posterized = image_posterize(img);
+
+        for (t = 0; t < NUM_THREADS; t++)
+        {
+            tinfo[t].thread_num = t + 1;
+
+            if (t + 1 == NUM_THREADS) {
+                hmax = img->height;
+                wmax = img->width;
+            }
+
+            else {
+                hmax = (t + 1) * ph;
+                wmax = (t + 1) * pw;
+            }
+
+            tinfo[t].fsth = hmax - t * ph;
+            tinfo[t].fstw = wmax - t * pw;
+            tinfo[t].lsth = hmax;
+            tinfo[t].lstw = wmax;
+
+            tinfo[t].img = image_new(pw, ph);
+
+            strcpy(tinfo[t].img->type, img->type);
+            tinfo[t].img->width = wmax - t * pw;
+            tinfo[t].img->height = hmax - t * ph;
+            tinfo[t].img->maxval = img->maxval;
+
+            for (h = t * ph; h < hmax; h++)
+            {
+                for (w = t * pw; w < wmax; w++)
+                {
+                    tinfo[t].img->pix[h][w] = img->pix[h][w];
+                }
+            }
+
+            pthread_create(&tinfo[t].thread_id, 
+                           NULL,
+                           &thread_posterize,
+                           &tinfo[t]);
+        }
+
+        posterized = image_new(img->width, img->height);
+
+        /* complete image header */
+        strcpy(pixelated->type, img->type);
+        pixelated->width = img->width;
+        pixelated->height = img->height;
+        pixelated->maxval = img->maxval;
+
+        for (t = 0; t < NUM_THREADS; t++) {
+            pthread_join(tinfo[t].thread_id, &res);
+
+            ph = 0;
+            pw = 0;
+
+            for (h = tinfo[t].fsth; h < tinfo[t].lsth; h ++)
+            {
+                for (w = tinfo[t].fstw; w < tinfo[t].lstw; w++)
+                {
+                    pixelated[h][w] = (image*)res.pix[ph][pw];
+                    pw++;
+
+                    if (pw == (image*)res.width) {
+                        ph++;
+                        pw = 0;
+                    }
+                }
+
+                ph++;
+                // if (ph == res->height)
+            }
+        }
+
         end = clock();
 
         image_write(posterized, fileout);
@@ -151,7 +249,7 @@ int main(int argc, char const *argv[])
     image_free(img, img->height);
 
     /* determine serial time for later comparison */
-    printf("Serial running time is: %f\n", (end-start)/CLOCKS_PER_SEC);
+    printf("Pthreads running time is: %f\n", (end-start)/CLOCKS_PER_SEC);
 
     return 0;
 }

@@ -1,3 +1,6 @@
 *imgserial
+*imgomp
+*imgmpi
+**.ppm
 *.dSYM
 *.DS_Store

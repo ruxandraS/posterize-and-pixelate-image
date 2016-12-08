@@ -1,115 +1,7 @@
 #include "img.h"
-
 #include "omp.h"
 
 extern int num_threads;
-
-static RGBpix **
-rgbpix_new(int width, int height)
-{
-    int h;
-
-    RGBpix **pix = (RGBpix**) calloc(height, sizeof(RGBpix*));
-    for (h = 0; h < height; h++)
-    {
-        pix[h] = (RGBpix*) calloc(width, sizeof(RGBpix));
-    }
-
-    return pix;
-}
-
-static
-void rgbpix_free(RGBpix **pix, int height)
-{
-    int h;
-
-    for (h = 0; h < height; h++)
-    {
-        free(pix[h]);
-    }
-    free(pix);
-
-}
-
-static image * 
-image_new(int width, int height)
-{
-    image *img = (image*) calloc(1, sizeof(image));
-    img->pix = rgbpix_new(width, height);
-
-    return img;
-}
-
-static
-void image_free(image *img, int height)
-{
-    rgbpix_free(img->pix, height);
-    free(img);
-}
-
-static image *
-image_read(const char *filename)
-{
-    int h, w, height, width, maxval;
-    char type[] = "P6";
-    FILE *file;
-    image *img;
-
-    /* open file named fileName in read mode */
-    file = fopen(filename, "rb");
-
-    /* read file header and check for error */
-    fscanf(file, "%s\n%d %d\n%d\n",
-           type, &width, &height, &maxval);
-    img = image_new(width, height);
-
-    /* complete image header */
-    strcpy(img->type, type);
-    img->width = width;
-    img->height = height;
-    img->maxval = maxval;
-
-    /* reading image pixels */
-    for (h = 0; h < img->height; h++) {
-        for (w = 0; w < img->width; w++) {
-            fread((void *) &(img->pix[h][w].red), sizeof(pixel), 1, file);
-            fread((void *) &(img->pix[h][w].green), sizeof(pixel), 1, file);
-            fread((void *) &(img->pix[h][w].blue), sizeof(pixel), 1, file);
-        }
-    }
-
-    /* clean up */
-    fclose(file);
-
-    return img;
-}
-
-static
-void image_write(image *img, const char *filename)
-{
-    int h, w;
-    FILE *file;
-
-    /* open file named fileName in read mode */
-    file = fopen(filename, "wb");
-
-    /* write the header to the file */
-    fprintf(file, "%s\n%d% d\n%d\n", img->type, img->width, img->height, img->maxval);
-
-    /* write pixels to the file */
-    for (h = 0; h < img->height; h++)
-    {
-        for (w = 0; w < img->width; w++)
-        {
-            fwrite((void*) &(img->pix[h][w].red), sizeof(pixel), 1, file);
-            fwrite((void*) &(img->pix[h][w].green), sizeof(pixel), 1, file);
-            fwrite((void*) &(img->pix[h][w].blue), sizeof(pixel), 1, file);
-        }
-    }
-
-    /* clean up */
-    fclose(file);
-}
 
 static
 pixel pixel_reduce(pixel pixel)
@@ -132,6 +24,7 @@ image_posterize(image *img)
     int w, h;
     image *posterized;
 
+    /* alloc memory for image */
     posterized = image_new(img->width, img->height);
 
     /* complete image header */
@@ -160,6 +53,7 @@ image_pixelate(image *img)
     int w, h, pw, ph, avg_red, avg_green, avg_blue, pixel_count, hmax, wmax;
     image *pixelated;
 
+    /* alloc memory for image */
     pixelated = image_new(img->width, img->height);
 
     /* complete image header */
@@ -180,6 +74,7 @@ image_pixelate(image *img)
     {
         for (w = 0; w < pixelated->width; w+= PIXELATE_RATIO)
         {
+            /* new submatrix region - compute value of pixels */
             if (h % PIXELATE_RATIO == 0 && w % PIXELATE_RATIO == 0) {
                 avg_red = 0;
                 avg_green = 0;
@@ -205,6 +100,7 @@ image_pixelate(image *img)
                 avg_blue /= pixel_count;
             }
 
+            /* fill in image pixels */
             for (ph = h; ph < hmax; ph++) {
                 for (pw = w; pw < wmax; pw++) {
                     pixelated->pix[ph][pw].red = avg_red;
@@ -220,10 +116,10 @@ image_pixelate(image *img)
 
 int main(int argc, char const *argv[])
 {
-    image *img, *posterized, *pixelated;
     const char *filter, *filein, *fileout;
     double start, end;
     int num_threads;
+    image *img, *posterized, *pixelated;
 
     if (argc < 5) {
         printf("Usage: <executable> <filter_name> <input_file> <output_file> <num_threads>\n");
@@ -239,6 +135,7 @@ int main(int argc, char const *argv[])
 
     img = image_read(filein);
 
+    /* apply posterize or pixelate filter to image */
     if (strcmp("pixelate", filter) == 0)
     {
         start = omp_get_wtime();
@@ -264,8 +161,10 @@ int main(int argc, char const *argv[])
         printf("Usage: Please choose between \"posterize\" and \"pixelate\" as filter\n");
     }
 
+    /* clean up */
     image_free(img, img->height);
 
+    /* determine serial time for later comparison */
     printf("OMP running time is: %f\n", end-start);
 
     return 0;
