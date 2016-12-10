@@ -6,7 +6,7 @@
 typedef struct thread_info {    /* Used as argument to thread_start() */
     pthread_t   thread_id;        /* ID returned by pthread_create() */
     int         thread_num;       /* Application-defined thread # */
-    int         fstw, fsth, lstw, lsth;
+    int         lw, lh, rw, rh;
     image       *img;      
 } thread_info;
 
@@ -157,15 +157,19 @@ int main(int argc, char const *argv[])
 
     else if (strcmp("posterize", filter) == 0)
     {
+        /* compute dimension of chunks */
         ph = img->height / NUM_THREADS;
         pw = img->width / NUM_THREADS;
 
         start = clock();
 
+        /* create NUM_THREADS threads */
         for (t = 0; t < NUM_THREADS; t++)
         {
             tinfo[t].thread_num = t + 1;
 
+            /* send more pixels to last thread if height or width are not
+               perfectly divisable to NUM_THREADS */
             if (t + 1 == NUM_THREADS) {
                 hmax = img->height;
                 wmax = img->width;
@@ -176,18 +180,22 @@ int main(int argc, char const *argv[])
                 wmax = (t + 1) * pw;
             }
 
-            tinfo[t].fsth = hmax - t * ph;
-            tinfo[t].fstw = wmax - t * pw;
-            tinfo[t].lsth = hmax;
-            tinfo[t].lstw = wmax;
+            /* store top left corner and bottom right corner of each chunk */
+            tinfo[t].lh = hmax - t * ph;
+            tinfo[t].lw = wmax - t * pw;
+            tinfo[t].rh = hmax;
+            tinfo[t].rw = wmax;
 
+            /* create chunk image for further processing */
             tinfo[t].img = image_new(pw, ph);
 
+            /* complete chunk image header */
             strcpy(tinfo[t].img->type, img->type);
             tinfo[t].img->width = wmax - t * pw;
             tinfo[t].img->height = hmax - t * ph;
             tinfo[t].img->maxval = img->maxval;
 
+            /* fill in chunk image pixels */
             for (h = t * ph; h < hmax; h++)
             {
                 for (w = t * pw; w < wmax; w++)
@@ -196,12 +204,14 @@ int main(int argc, char const *argv[])
                 }
             }
 
+            /* send chunks to each thread */
             pthread_create(&tinfo[t].thread_id, 
                            NULL,
                            &thread_posterize,
                            &tinfo[t]);
         }
 
+        /* create final image */
         posterized = image_new(img->width, img->height);
 
         /* complete image header */
@@ -210,15 +220,16 @@ int main(int argc, char const *argv[])
         pixelated->height = img->height;
         pixelated->maxval = img->maxval;
 
+        /* gather processed chunk images from all threads */
         for (t = 0; t < NUM_THREADS; t++) {
             pthread_join(tinfo[t].thread_id, &res);
 
-            ph = 0;
-            pw = 0;
+            ph = 0; /* iterate through final image's height */
+            pw = 0; /* iterate through final image's width */
 
-            for (h = tinfo[t].fsth; h < tinfo[t].lsth; h ++)
+            for (h = tinfo[t].lh; h < tinfo[t].rh; h ++)
             {
-                for (w = tinfo[t].fstw; w < tinfo[t].lstw; w++)
+                for (w = tinfo[t].lw; w < tinfo[t].rw; w++)
                 {
                     pixelated[h][w] = (image*)res.pix[ph][pw];
                     pw++;
@@ -228,9 +239,6 @@ int main(int argc, char const *argv[])
                         pw = 0;
                     }
                 }
-
-                ph++;
-                // if (ph == res->height)
             }
         }
 
