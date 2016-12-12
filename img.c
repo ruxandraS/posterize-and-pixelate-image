@@ -38,7 +38,6 @@ image_posterize(image *img)
             posterized->pix[h][w].red = pixel_reduce(img->pix[h][w].red);
             posterized->pix[h][w].green = pixel_reduce(img->pix[h][w].green);
             posterized->pix[h][w].blue = pixel_reduce(img->pix[h][w].blue);
-
         }
     }
 
