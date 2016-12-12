@@ -1,7 +1,7 @@
-*imgserial
-*imgomp
-*imgmpi
-*imgpthr
-**.ppm
+imgserial
+imgomp
+imgmpi
+imgpthr
+*.ppm
 *.dSYM
-*.DS_Store
+.DS_Store
