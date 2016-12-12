@@ -90,7 +90,7 @@ pixel pixel_reduce(pixel pixel)
 int main(int argc, char *argv[])
 {
     const char *filter, *filein, *fileout;
-    // struct timespec start, end;
+    // struct timespec start, end; //
     int h, k, rank, worker_id, num_workers, master_id, i, hchunk, wchunk, lh, rh, lw, rw;
     image *img, *out_img;
     void *res;
