@@ -90,8 +90,8 @@ pixel pixel_reduce(pixel pixel)
 int main(int argc, char *argv[])
 {
     const char *filter, *filein, *fileout;
-    struct timespec start, end;
-    int h, rank, worker_id, num_workers, master_id, i, hchunk, wchunk, lh, rh, lw, rw;
+    // struct timespec start, end;
+    int h, k, rank, worker_id, num_workers, master_id, i, hchunk, wchunk, lh, rh, lw, rw;
     image *img, *out_img;
     void *res;
     MPI_Status status;
@@ -113,18 +113,21 @@ int main(int argc, char *argv[])
 
     master_id = num_workers = num_tasks - 1;
 
+    buffer_img = rgbpix_new(1000, 1000);
     /* apply posterize or pixelate filter to image */
     if (strcmp("pixelate", filter) == 0)
     {
+        int source;
         if (rank == master_id) {
             img = image_read(filein);
 
-            worker_id = 0;
+            // start = MPI_Wtime();
 
+            // worker_id = 0;
             for (i = 0; i < num_workers; i++) {
                 hchunk = img->height / num_workers;
-                while (hchunk % PIXELATE_RATIO != 0)
-                    hchunk++;
+                // while (hchunk % PIXELATE_RATIO != 0)
+                //     hchunk++;
                 wchunk = img->width;
 
                 /* store top left corner and bottom right corner of each chunk */
@@ -133,19 +136,44 @@ int main(int argc, char *argv[])
                 size_buffer[2] = rh = (i + 1) * hchunk;
                 size_buffer[3] = rw = wchunk;
 
-                if (i + 1 == num_workers) {
-                    size_buffer[2] = rh = img->height;
-                }
+                // if (i + 1 == num_workers) {
+                //     size_buffer[2] = rh = img->height;
+                // }
 
                 MPI_Send (size_buffer, 4, MPI_INT, i, TAG_SIZE, MPI_COMM_WORLD);
                 printf("[%d] Sent\n", rank);
 
-                buffer_img = rgbpix_new(rw - lw, grh - lh);
+                // buffer_img = rgbpix_new(rw - lw, rh - lh);
+                k = 0;
                 for (h = lh; h < rh; h++)
-                    memcpy(buffer_img, img->pix[h], (rw - lw) * sizeof(RGBpix));
+                    memcpy(buffer_img[k++], img->pix[h], img->width * sizeof(RGBpix));
 
-                MPI_Send(buffer_img, (rw - lw) * (rh - lh) * 3, MPI_UNSIGNED_CHAR, worker_id++, TAG_WORK, MPI_COMM_WORLD);
+                MPI_Send(buffer_img, (rw - lw) * (rh - lh) * sizeof(RGBpix), MPI_UNSIGNED_CHAR, i, TAG_WORK, MPI_COMM_WORLD);
+            }
 
+            for (i = 0; i < num_workers; i++) {
+                MPI_Recv (buffer_img, (rw - lw) * (rh - lh) * sizeof(RGBpix), MPI_UNSIGNED_CHAR, MPI_ANY_SOURCE, TAG_WORK, MPI_COMM_WORLD, &status);
+                source = status.MPI_SOURCE;
+                printf("[%d] Am primit de la %d\n", rank, source);
+                hchunk = img->height / num_workers;
+                // while (hchunk % PIXELATE_RATIO != 0)
+                //     hchunk++;
+                lh = source * hchunk;
+                lw = 0;
+                rh = (source + 1) * hchunk;
+                rw = img->width;
+                // if (source + 1 == num_workers) {
+                //     rh = img->height;
+                // }
+
+                printf("Lh %d rh %d\n", lh, rh);
+                k = 0;
+                for (h = lh; h < rh; h++)
+                    memcpy(img->pix[h], buffer_img[k++], img->width * sizeof(RGBpix));
+                printf("%d %d %d\n", img->pix[55][55].red, img->pix[55][55].green, img->pix[55][55].blue);
+            }
+
+            for (i = 0; i < num_workers; i++) {
                 size_buffer[0] = size_buffer[1] = size_buffer[2] = size_buffer[3] = -1;
                 MPI_Send (size_buffer, 4, MPI_INT, i, TAG_SIZE, MPI_COMM_WORLD);
                 printf("[%d] Lst sent\n", rank);
@@ -155,94 +183,37 @@ int main(int argc, char *argv[])
         else {
             while (1) {
                 MPI_Recv(size_buffer, 4, MPI_INT, master_id, TAG_SIZE, MPI_COMM_WORLD, &status);
-                printf("[%d] Received\n", rank);
+                printf("[%d] Received %d %d %d %d\n", rank, size_buffer[0], size_buffer[1], size_buffer[2], size_buffer[3]);
 
                 lh = size_buffer[0];
                 lw = size_buffer[1];
                 rh = size_buffer[2];
                 rw = size_buffer[3];
 
-                if (lh == -1 && rh == -1 && lw == -1 && rw == -1)
+                if (lh == -1 && rh == -1 && lw == -1 && rw == -1) {
+                    printf("[%d] Am primit sa ma culc\n", rank);
                     break;
+                }
 
-                MPI_Recv(buffer_img, (rw - lw) * (rh - lh) * 3, MPI_UNSIGNED_CHAR, MPI_ANY_SOURCE, TAG_WORK, MPI_COMM_WORLD, &status);
+                // buffer_img = rgbpix_new(rw - lw, rh - lh);
+                MPI_Recv(buffer_img, (rw - lw) * (rh - lh) * sizeof(RGBpix), MPI_UNSIGNED_CHAR, MPI_ANY_SOURCE, TAG_WORK, MPI_COMM_WORLD, &status);
+                printf("[%d] Am primit %d\n", rank, (rw - lw) * (rh -lh));
+
+                MPI_Send(buffer_img, (rw - lw) * (rh - lh) * sizeof(RGBpix), MPI_UNSIGNED_CHAR, master_id, TAG_WORK, MPI_COMM_WORLD);
             }
         }
 
-        clock_gettime (CLOCK_MONOTONIC, &end);
+        printf("[%d] Ma culc\n", rank);
+        // end = MPI_Wtime();
 
-        //image_write(out_img, fileout);
+        image_write(img, fileout);
     }
 
     else if (strcmp("posterize", filter) == 0)
     {
-        clock_gettime (CLOCK_MONOTONIC, &start);
+        // clock_gettime (CLOCK_MONOTONIC, &start);
 
-        // /* create chunk image for further processing */
-        // out_img = image_new(img->width, img->height);
-
-        // /* complete chunk image header */
-        // strcpy(out_img->type, img->type);
-        // out_img->width = img->width;
-        // out_img->height = img->height;
-        // out_img->maxval = img->maxval;
-
-        // hchunk = img->height / num_tasks;
-        // wchunk = img->width;
-
-        // /* create num_tasks threads */
-        // for (t = 0; t < num_tasks; t++)
-        // {
-        //     tinfo[t].thread_num = t + 1;
-
-        //     /* send more pixels to last thread if height or width are not
-        //        perfectly divisable to num_tasks */
-        //     if (t + 1 == num_tasks) {
-        //         hchunk = img->height;
-        //         wchunk = img->width;
-
-        //         /* store top left corner and bottom right corner of each chunk */
-        //         if (t > 1) {
-        //             tinfo[t].lh = tinfo[t - 1].lh;
-        //             tinfo[t].lw = tinfo[t - 1].lw;
-        //             tinfo[t].rh = hchunk;
-        //             tinfo[t].rw = wchunk;
-        //         }
-
-        //         else {
-        //             tinfo[t].lh = 0;
-        //             tinfo[t].lw = 0;
-        //             tinfo[t].rh = hchunk;
-        //             tinfo[t].rw = wchunk;
-        //         }
-        //     }
-
-        //     else {
-        //         /* store top left corner and bottom right corner of each chunk */
-        //         tinfo[t].lh = t * hchunk;
-        //         tinfo[t].lw = 0;
-        //         tinfo[t].rh = (t + 1) * hchunk;
-        //         tinfo[t].rw = wchunk;
-        //     }
-
-        //     tinfo[t].in_img = img;
-        //     tinfo[t].out_img = out_img;
-
-
-        //     /* send chunks to each thread */
-        //     pthread_create(&tinfo[t].thread_id,
-        //                    NULL,
-        //                    &thread_posterize,
-        //                    &tinfo[t]);
-        // }
-
-
-        // /* gather processed chunk images from all threads */
-        // for (t = 0; t < num_tasks; t++) {
-        //     pthread_join(tinfo[t].thread_id, &res);
-        // }
-
-        clock_gettime (CLOCK_MONOTONIC, &end);
+        // clock_gettime (CLOCK_MONOTONIC, &end);
 
      //   image_write(out_img, fileout);
     }
@@ -259,8 +230,8 @@ int main(int argc, char *argv[])
     // image_free(out_img, out_img->height);
 
     /* determine serial time for later comparison */
-    printf("MPI running time for %d threads is: %f\n", num_tasks,
-            end.tv_sec - start.tv_sec + (end.tv_nsec - start.tv_nsec) / 1000000000.0);
+    // printf("MPI running time for %d threads is: %f\n", num_tasks,
+            // end - start);
 
     return 0;
 }
