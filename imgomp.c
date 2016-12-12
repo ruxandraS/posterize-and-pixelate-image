@@ -1,7 +1,7 @@
 #include "img.h"
 #include "omp.h"
 
-extern int num_threads;
+int num_threads;
 
 static
 pixel pixel_reduce(pixel pixel)
@@ -165,7 +165,7 @@ int main(int argc, char const *argv[])
     image_free(img, img->height);
 
     /* determine serial time for later comparison */
-    printf("OMP running time is: %f\n", end-start);
+    printf("OMP running time for %d threads is: %f\n", num_threads, end-start);
 
     return 0;
 }
