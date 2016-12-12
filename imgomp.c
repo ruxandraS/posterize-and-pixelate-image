@@ -107,7 +107,7 @@ image_pixelate(image *img)
                     pixelated->pix[ph][pw].green = avg_green;
                     pixelated->pix[ph][pw].blue = avg_blue;
                 }
-            }                 
+            }
         }
     }
 
