@@ -2,6 +2,7 @@ imgserial
 imgomp
 imgmpi
 imgpthr
+imghybr
 *.ppm
 *.dSYM
 .DS_Store
