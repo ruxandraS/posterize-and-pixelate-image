@@ -1,13 +1,36 @@
 # Image Filters
 
-### Loging on university queue
+### Compiling
+Compile from parent directory
+```sh
+# compile all
+$ make all
+
+# compile one or more
+$ make serial
+$ make omp
+$ make mpi
+$ make pthreads
+$ make hybrid
 ```
 
-ssh user.name@fep.grid.pub.ro
-use nehalem queue as explained in: http://cs.curs.pub.ro/wiki/asc/_media/asc:resurse:cluster-cheat-sheet.pdf
+### Running
+Run from parent directory
+```sh
+$ ./imgserial <filter_name> img/<input_image> ./<output_image>
+$ ./imgomp <filter_name> img/<input_image> ./<output_image> <no_threads>
+$ ./imgpthr <filter_name> img/<input_image> ./<output_image> <no_threads>
+$ mpirun -np <no_threads> imgmpi <filter_name> img/<input_image> ./<output_image>
+$ mpirun -np <no_threads> imghybr <filter_name> img/<input_image> ./<output_image>
 ```
 
-### Fep Grid Results:
+### Cleaning up folder
+Clean up from parent directory
+```sh
+$ make clean
+```
+
+### Time results on ibm-nehalem engine:
 
 POSTERIZE
 
@@ -60,7 +83,6 @@ PIXELATE
 ***********************************************************
 
 POSTERIZE
-* MPI running time is: 0.178786
 * MPI running time is: 16.681595
 * MPI running time is: 14.639783
 * MPI running time is: 43.927502
