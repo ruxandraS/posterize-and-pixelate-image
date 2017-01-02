@@ -60,18 +60,28 @@ PIXELATE
 ***********************************************************
 
 POSTERIZE
-
-* Hybrid running time for 1 threads is: 0.427952
-* Hybrid running time for 2 threads is: 0.514690
-* Hybrid running time for 4 threads is: 0.528134
-* Hybrid running time for 8 threads is: 0.541748
-* Hybrid running time for 16 threads is: 0.726876
-
+* MPI running time is: 0.178786
+* MPI running time is: 16.681595
+* MPI running time is: 14.639783
+* MPI running time is: 43.927502
+* MPI running time is: 69.559403
 
 PIXELATE
+* MPI running time is: 17.273602
+* MPI running time is: 13.735005
+* MPI running time is: 50.632013
+* MPI running time is: 56.459588
 
-* Hybrid running time for 1 threads is: 0.392366
-* Hybrid running time for 2 threads is: 0.498047
-* Hybrid running time for 4 threads is: 0.479092
-* Hybrid running time for 8 threads is: 0.518967
-* Hybrid running time for 16 threads is: 0.727811
+***********************************************************
+
+POSTERIZE
+* MPI-OMP running time is: 15.094850
+* MPI-OMP running time is: 18.839990
+* MPI-OMP running time is: 33.000534
+* MPI-OMP running time is: 64.260157
+
+PIXELATE
+* MPI-OMP running time is: 15.537996
+* MPI-OMP running time is: 15.800323
+* MPI-OMP running time is: 42.949154
+* MPI-OMP running time is: 65.900048
