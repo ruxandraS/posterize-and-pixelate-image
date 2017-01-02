@@ -3,16 +3,16 @@
 
 int num_tasks;
 
-#define BUFFSIZE       16777216 // 16 MiB
 #define TAG_SIZE       43
 #define TAG_WORK       42
 
-
+/* store matrix as an unidimensional array to make MPI transmission possible */
 RGBpix **alloc_2d_rgb(int height, int width)
 {
+    int i;
     RGBpix *data = (RGBpix *)malloc(height*width*sizeof(RGBpix));
     RGBpix **array= (RGBpix **)malloc(height*sizeof(RGBpix*));
-    for (int i=0; i<height; i++)
+    for (i = 0; i < height; i++)
         array[i] = &(data[width*i]);
 
     return array;
@@ -39,7 +39,6 @@ image_posterize(RGBpix **pix, int width, int height)
     int w, h;
     RGBpix **posterized;
 
-    // posterized = rgbpix_new(width, height);
     posterized = alloc_2d_rgb(height, width);
     /* loop through chunk image and complete final image pixels */
     for (h = 0; h < height; h++)
@@ -120,13 +119,12 @@ image_pixelate(RGBpix **pix, int width, int height)
 int main(int argc, char *argv[])
 {
     const char *filter, *filein, *fileout;
-    int h, k, rank, num_workers, master_id, i;
+    double start, end;
+    int h, k, rank, num_workers, master_id, i, chunk_size;
+    int size_buffer[2];
     image *img, *out_img;
     MPI_Status status;
-    int size_buffer[2];
     RGBpix **buffer_img;
-    int chunk_size;
-    double start, end;
 
     if (argc < 4) {
         printf("Usage: mpirun -np <num_tasks> <executable> <filter_name> <input_file> <output_file>\n");
@@ -177,7 +175,7 @@ int main(int argc, char *argv[])
                 size_buffer[1] = img->height / num_workers;
                 chunk_size = size_buffer[0] * size_buffer[1];
 
-                /* Send width and height */
+                /* Send chunk's width and height */
                 MPI_Send (size_buffer, 2, MPI_INT, i, TAG_SIZE, MPI_COMM_WORLD);
 
                 /* Copy data into buffer */
@@ -209,11 +207,16 @@ int main(int argc, char *argv[])
 
             end = MPI_Wtime();
             printf("MPI running time is: %lf\n", end-start);
+
             image_write(out_img, fileout);
+
+            /* clean up */
+            image_free(img, img->height);
+            image_free(out_img, out_img->height);
         }
         else {
             while (1) {
-                /* Receive width and height from master */
+                /* Receive chunk's width and height from master */
                 MPI_Recv(size_buffer, 2, MPI_INT, master_id, TAG_SIZE, MPI_COMM_WORLD, &status);
 
                 if (size_buffer[0] == -1 && size_buffer[1] == -1) {
@@ -225,7 +228,7 @@ int main(int argc, char *argv[])
                 buffer_img = alloc_2d_rgb(size_buffer[1], size_buffer[0]);
                 /* Receive data from master */
                 MPI_Recv(&(buffer_img[0][0]), chunk_size, RGB_TYPE, master_id, TAG_WORK, MPI_COMM_WORLD, &status);
-                printf("[%d] Am primit %d\n", rank, chunk_size);
+                printf("[%d] Received %d\n", rank, chunk_size);
 
                 buffer_img = image_pixelate(buffer_img, size_buffer[0], size_buffer[1]);
 
@@ -255,7 +258,7 @@ int main(int argc, char *argv[])
                 size_buffer[1] = img->height / num_workers;
                 chunk_size = size_buffer[0] * size_buffer[1];
 
-                /* Send width and height */
+                /* Send chunk's width and height */
                 MPI_Send (size_buffer, 2, MPI_INT, i, TAG_SIZE, MPI_COMM_WORLD);
 
                 /* Copy data into buffer */
@@ -286,13 +289,17 @@ int main(int argc, char *argv[])
             }
 
             end = MPI_Wtime();
+            printf("MPI running time is: %lf\n", end-start);
 
             image_write(out_img, fileout);
-            printf("MPI running time is: %lf\n", end-start);
+
+            /* clean up */
+            image_free(img, img->height);
+            image_free(out_img, out_img->height);
         }
         else {
             while (1) {
-                /* Receive width and height from master */
+                /* Receive chunk's width and height from master */
                 MPI_Recv(size_buffer, 2, MPI_INT, master_id, TAG_SIZE, MPI_COMM_WORLD, &status);
 
                 if (size_buffer[0] == -1 && size_buffer[1] == -1) {
@@ -304,7 +311,7 @@ int main(int argc, char *argv[])
                 buffer_img = alloc_2d_rgb(size_buffer[1], size_buffer[0]);
                 /* Receive data from master */
                 MPI_Recv(&(buffer_img[0][0]), chunk_size, RGB_TYPE, master_id, TAG_WORK, MPI_COMM_WORLD, &status);
-                printf("[%d] Am primit %d\n", rank, chunk_size);
+                printf("[%d] Received %d\n", rank, chunk_size);
 
                 buffer_img = image_posterize(buffer_img, size_buffer[0], size_buffer[1]);
 
@@ -320,10 +327,6 @@ int main(int argc, char *argv[])
     }
 
     MPI_Finalize ();
-
-    /* clean up */
-    // image_free(img, img->height);
-    // image_free(out_img, out_img->height);
 
     return 0;
 }
