@@ -10,9 +10,7 @@ mpi: img.h imgmpi.c imgio.c
 pthreads: img.h imgpthr.c imgio.c
 	$(CC) imgpthr.c imgio.c -o imgpthr $(CFLAGS) -lpthread
 hybrid: img.h imghybr.c imgio.c
-	$(CC) -fopenmp imghybr.c imgio.c -o imghybr $(CFLAGS) -lpthread
-mpiomp: img.h mpiomp.c imgio.c
-	mpicc -fopenmp mpiomp.c imgio.c -o mpiomp $(CFLAGS)
+	mpicc -fopenmp imghybr.c imgio.c -o imghybr $(CFLAGS)
 clean:
 	rm -f imgserial imgmpi imgomp imgpthr imghybr
 	rm -f *.ppm
